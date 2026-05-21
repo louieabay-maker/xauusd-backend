@@ -41,16 +41,17 @@ async def stream_market_data():
         print("Successfully synchronized with MetaTrader Core Platform.")
 
         # Main streaming data loop
-        while True:
-            if connected_clients:
-                try:
-                    # 1. Fetch Raw Ticks for accurate UI execution
-                    tick = await connection.get_ticket(symbol="XAUUSD")
-                    raw_price = tick['ask']
-                    
-                    # --- AUTO-CALIBRATION MATH BLOCK ---
-                    # Subtracts exactly 112.2 to align the data feed with terminal pricing
-                    calibrated_price = round(raw_price - 112.2, 2)
+    while True:
+        if connected_clients:
+            try:
+                # 1. Fetch Raw Ticks for accurate UI execution
+                tick = await connection.get_ticket(symbol="XAUUSD")
+                raw_price = tick['ask']
+                
+                # --- AUTO-CALIBRATION MATH BLOCK ---
+                # Pass raw market price directly to maintain perfect terminal synchronization
+                calibrated_price = round(raw_price, 2)
+            # 2. Fetch 4-Hour (4H) historical candles for Top-Down Trend Confluence
 
                     # 2. Fetch 4-Hour (4H) historical candles for Top-Down Trend Confluence
                     candles = await connection.get_candles(
