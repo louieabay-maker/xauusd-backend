@@ -11,7 +11,7 @@ app = FastAPI()
 # Retrieve Environment Variables from Render Config
 token = os.getenv("METAAPI_TOKEN")
 account_id = os.getenv("METAAPI_ACCOUNT_ID")
-port = int(os.getenv("PORT", 10000))
+port = 10000
 
 # Global state tracker for connected mobile apps
 connected_clients = set()
