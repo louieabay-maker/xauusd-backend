@@ -1,7 +1,5 @@
 import os
 import asyncio
-import numpy as np
-import pandas as pd
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from metaapi_cloud_sdk import MetaApi
 
@@ -11,7 +9,6 @@ app = FastAPI()
 # Retrieve Environment Variables from Render Config
 token = os.getenv("METAAPI_TOKEN")
 account_id = os.getenv("METAAPI_ACCOUNT_ID")
-port = 10000
 
 # Global state tracker for connected mobile apps
 connected_clients = set()
@@ -36,7 +33,7 @@ async def startup_event():
 async def stream_market_data():
     print("Initializing MetaApi connection platform...")
     
-    # Clean up token and account ID strings
+    # Clean up token and account ID strings safely
     api_token = str(token).strip() if token else ""
     target_account_id = str(account_id).strip() if account_id else ""
     
@@ -68,7 +65,7 @@ async def stream_market_data():
                     raw_price = tick['ask']
                     calibrated_price = round(raw_price, 2)
 
-                    # Build the live data payload package
+                    # Build the live data payload package cleanly
                     payload = {
                         "price": calibrated_price,
                         "timestamp": tick.get('time', 0)
