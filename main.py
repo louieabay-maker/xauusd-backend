@@ -72,7 +72,7 @@ export default function Dashboard() {
         try {
           const payload = JSON.parse(event.data);
           
-          // Pull raw numbers directly out of your python server's payload package
+          # Pull raw numbers directly out of your python server's payload package
           const livePrice = payload.price; 
           
           setLiveMetrics(prev => {
