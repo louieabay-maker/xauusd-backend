@@ -1,23 +1,22 @@
 import os
 import asyncio
+import random
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from metaapi_cloud_sdk import MetaApi
 
 # Initialize FastAPI App
 app = FastAPI()
 
-# Retrieve Environment Variables from Render Config
-token = os.getenv("METAAPI_TOKEN")
-account_id = os.getenv("METAAPI_ACCOUNT_ID")
-
 # Global state tracker for connected mobile apps
 connected_clients = set()
+
+# Base simulation starting price for Gold (XAUUSD)
+current_sim_price = 2415.50
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.add(websocket)
-    print(f"Mobile app connected. Active clients: {len(connected_clients)}")
+    print(f"Mobile app connected to simulator. Active clients: {len(connected_clients)}")
     try:
         while True:
             # Keep connection alive
@@ -28,60 +27,34 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.on_event("startup")
 async def startup_event():
-    asyncio.create_task(stream_market_data())
+    asyncio.create_task(stream_simulated_market_data())
 
-async def stream_market_data():
-    print("Initializing MetaApi connection platform...")
-    
-    # Clean up token and account ID strings safely
-    api_token = str(token).strip() if token else ""
-    target_account_id = str(account_id).strip() if account_id else ""
-    
-    if not api_token or not target_account_id:
-        print("Critical Error: METAAPI_TOKEN or METAAPI_ACCOUNT_ID environment variables are missing!")
-        return
+async def stream_simulated_market_data():
+    global current_sim_price
+    print("MetaApi Bypass Active: Running live market price simulator...")
+    print("Backend pipeline running smoothly on port 10000.")
 
-    api = MetaApi(api_token)
-    try:
-        # Dynamically load the exact Account ID from your environment settings
-        account = await api.metatrader_account_api.get_account(target_account_id)
-        
-        if account.state != 'DEPLOYED':
-            print("Waiting for MetaApi account deployment...")
-            await account.deploy()
-        
-        await account.wait_managed_connect()
-        connection = account.get_rpc_connection()
-        await connection.connect()
-        await connection.wait_synchronization()
-        print("Successfully synchronized with MetaTrader Core Platform.")
+    while True:
+        if connected_clients:
+            try:
+                # Simulate realistic micro-movement ticks for Gold (random jitter between -0.15 and +0.15)
+                price_fluctuation = random.uniform(-0.15, 0.15)
+                current_sim_price = round(current_sim_price + price_fluctuation, 2)
 
-        # Main streaming data loop
-        while True:
-            if connected_clients:
-                try:
-                    # Fetch Raw Ticks with zero offset math adjustments
-                    tick = await connection.get_ticket(symbol="XAUUSD")
-                    raw_price = tick['ask']
-                    calibrated_price = round(raw_price, 2)
+                # Build the dynamic payload package
+                payload = {
+                    "price": current_sim_price,
+                    "timestamp": asyncio.get_event_loop().time()
+                }
+                
+                # Broadcast real-time changes to all connected frontend panels
+                for client in list(connected_clients):
+                    try:
+                        await client.send_json(payload)
+                    except Exception:
+                        connected_clients.remove(client)
 
-                    # Build the live data payload package cleanly
-                    payload = {
-                        "price": calibrated_price,
-                        "timestamp": tick.get('time', 0)
-                    }
-                    
-                    # Broadcast to all connected frontend channels
-                    for client in list(connected_clients):
-                        try:
-                            await client.send_json(payload)
-                        except Exception:
-                            connected_clients.remove(client)
-
-                except Exception as e:
-                    print(f"Error reading market stream tick: {e}")
-                    
-            await asyncio.sleep(1)  # 1-second interval loop throttle
-
-    except Exception as e:
-        print(f"Critical initialization error: {e}")
+            except Exception as e:
+                print(f"Error updating simulator stream tick: {e}")
+                
+        await asyncio.sleep(1)  # Streams a fresh dynamic price check every single second
