@@ -1,11 +1,15 @@
 import os
+import asyncio
+import random
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
-app = FastAPI(title="XAUUSD AI Live Feed")
+app = FastAPI(title="XAUUSD GoldPulse Stream Engine", version="2.0.0")
 
-# Enable CORS so your Base44 frontend can communicate with Render smoothly
+# Configure robust CORS handling for Base44 domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,72 +18,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------------------------------------------------------
-# Helper Functions & Formatting Fixes
-# ----------------------------------------------------------------
+# Active streaming connections registry
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
 
-def toast(message: str, options: dict = None):
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                # Handle stale or dropped client sockets gracefully
+                pass
+
+manager = ConnectionManager()
+
+# Background price broadcasting simulator (Direct Live-Feed Layer)
+async def track_gold_market_feed():
     """
-    Utility function to handle alert dispatches.
-    Fixed: Uses Unicode escape sequence to prevent file encoding syntax crashes.
+    Simulates high-precision, real-time XAUUSD pricing tick-by-tick.
+    Replace the random generator logic with your direct price feed API provider here.
     """
-    print(f"[ALERT] {message} with options {options}")
-    return {"status": "alert_dispatched", "message": message}
+    current_price = 2420.50
+    while True:
+        # Generate micro-scalping price ticks
+        price_change = round(random.uniform(-0.35, 0.35), 2)
+        current_price = round(current_price + price_change, 2)
+        
+        feed_payload = {
+            "symbol": "XAUUSD",
+            "price": current_price,
+            "change": price_change,
+            "status": "live_streaming",
+            "timestamp": asyncio.get_event_loop().time()
+        }
+        
+        await manager.broadcast(feed_payload)
+        await asyncio.sleep(1.0)  # Streams an updated price tick every single second
 
+@app.on_event("startup")
+async def startup_event():
+    # Spin up the direct market tracking task automatically on boot
+    asyncio.create_task(track_gold_market_feed())
 
-def get_pipeline_status_html() -> str:
-    """
-    Fixed: Wrapped raw HTML string in proper Python quotes to prevent 
-    SyntaxError: invalid character '·' (U+00B7).
-    """
-    return '<p className="text-xs text-muted-foreground">XAUUSD &middot; Render Node Pipeline</p>'
-
-# ----------------------------------------------------------------
-# WebSocket & Live Feed API Routes
-# ----------------------------------------------------------------
-
-@app.get("/")
-async def root():
-    # Pull raw numbers directly out of your python server's payload package
+# Dual-route root endpoint to clear Render health checker warnings
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root_endpoint(request: Request):
     return {
-        "status": "online",
-        "service": "XAUUSD AI Backend",
-        "pipeline_element": get_pipeline_status_html()
+        "status": "synchronized",
+        "engine": "XAUUSD Direct Stream Pipeline v2",
+        "environment": "Render Production"
     }
 
-
-@app.get("/trigger-test-alert")
-async def trigger_test_alert():
-    # Fixed: Passing the safe unicode sequence for the 🔔 emoji string
-    return toast('\U0001F514 Price Alert', {"type": "info"})
-
-
+# Dedicated Direct WebSocket Route
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """
-    Direct live-feed websocket connection bypassing old MT5 layers.
-    """
-    await websocket.accept()
-    print("[WS] Base44 client connected to direct live-feed stream.")
+async def websocket_stream_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
     try:
+        # Keep the socket pipeline open and listening for incoming client requests
         while True:
-            # Simple keepalive receiver block
-            data = await websocket.receive_text()
-            # In production, replace this with your direct live-feed API broadcast loop
-            await websocket.send_json({
-                "symbol": "XAUUSD",
-                "price": 2420.50,  # Example real-time price placeholder
-                "status": "streaming"
-            })
+            client_heartbeat = await websocket.receive_text()
+            # Send back immediate ping acknowledgement if requested
+            await websocket.send_json({"heartbeat": "acknowledged"})
     except WebSocketDisconnect:
-        print("[WS] Base44 client disconnected safely.")
-
-# ----------------------------------------------------------------
-# Application Startup
-# ----------------------------------------------------------------
-
-if __name__ == "__main__":
-    # Fixed: Hardcoded to port 10000 to match Render's environment expectations
-    port = int(os.environ.get("PORT", 10000))
-    print("Initializing Direct Data Stream platform...")
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+        manager.disconnect(websocket)
