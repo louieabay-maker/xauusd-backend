@@ -36,13 +36,17 @@ async def startup_event():
 async def stream_market_data():
     print("Initializing MetaApi connection platform...")
     
-    # CRITICAL FIX: Ensure token and account_id strings are stripped of whitespace
-    api_token = str(token).strip()
-    target_account_id = str(account_id).strip()
+    # Clean up token and account ID strings
+    api_token = str(token).strip() if token else ""
+    target_account_id = str(account_id).strip() if account_id else ""
     
+    if not api_token or not target_account_id:
+        print("Critical Error: METAAPI_TOKEN or METAAPI_ACCOUNT_ID environment variables are missing!")
+        return
+
     api = MetaApi(api_token)
     try:
-        # Dynamically load the exact Account ID from your Render Environment page
+        # Dynamically load the exact Account ID from your environment settings
         account = await api.metatrader_account_api.get_account(target_account_id)
         
         if account.state != 'DEPLOYED':
@@ -59,20 +63,18 @@ async def stream_market_data():
         while True:
             if connected_clients:
                 try:
-                    # Fetch Raw Ticks directly from your connected broker terminal
+                    # Fetch Raw Ticks with zero offset math adjustments
                     tick = await connection.get_ticket(symbol="XAUUSD")
                     raw_price = tick['ask']
-                    
-                    # Round cleanly to 2 decimal places with zero math offsets
                     calibrated_price = round(raw_price, 2)
 
-                    # Broadcast the true live payload package
+                    # Build the live data payload package
                     payload = {
                         "price": calibrated_price,
                         "timestamp": tick.get('time', 0)
                     }
                     
-                    # Send payload to all active client channels
+                    # Broadcast to all connected frontend channels
                     for client in list(connected_clients):
                         try:
                             await client.send_json(payload)
@@ -82,7 +84,7 @@ async def stream_market_data():
                 except Exception as e:
                     print(f"Error reading market stream tick: {e}")
                     
-            await asyncio.sleep(1)  # 1-second throttle interval
+            await asyncio.sleep(1)  # 1-second interval loop throttle
 
     except Exception as e:
         print(f"Critical initialization error: {e}")
