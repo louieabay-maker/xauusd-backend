@@ -127,7 +127,7 @@ export default function Dashboard() {
             const triggered = cfg.price_direction === 'above' ? livePrice >= cfg.price_target : livePrice <= cfg.price_target;
             if (triggered && lastAlertFiredRef.current['price'] !== cfg.price_target) {
               lastAlertFiredRef.current['price'] = cfg.price_target;
-              toast(`🔔 Price Alert`, {
+              toast('\U0001F514 Price Alert', {
                 description: `XAUUSD Target reached: $${livePrice}`,
                 duration: 5000,
               });
